@@ -22,13 +22,13 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  databaseURL: "https://tu-proyecto-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:xxxxxxxxxxxxxxxxxxxxxx",
+  apiKey: "AIzaSyAMLWJ5CFPdY-QP5Y1yU_uzXdYmt5mo2yM",
+  authDomain: "viaje-china.firebaseapp.com",
+  databaseURL: "https://viaje-china-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "viaje-china",
+  storageBucket: "viaje-china.firebasestorage.app",
+  messagingSenderId: "803724294463",
+  appId: "1:803724294463:web:f4fb28337a198f6acd3b8a",
 };
 
 // Ruta dentro de la base de datos donde vive toda la info del viaje.

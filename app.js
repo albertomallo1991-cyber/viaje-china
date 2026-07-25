@@ -1,0 +1,667 @@
+import { firebaseConfig, TRIP_PATH } from './firebase-config.js';
+
+/* =========================================================
+   DATA — extraído del Excel ViajeChina_1_.xlsx
+   ========================================================= */
+const PEOPLE = ["Mallo","Lichu","Albertito","Nacho"];
+
+const FLIGHTS = [
+  {id:"f1", date:"2026-08-18", label:"Ida · Tramo 1", from:"Madrid", fromT:"15:30", to:"Cairo", toT:"21:20", cost:null},
+  {id:"f2", date:"2026-08-18", label:"Ida · Tramo 2", from:"Cairo", fromT:"01:05", to:"Beijing", toT:"15:20", cost:556.75},
+  {id:"f3", date:"2026-08-31", label:"Vuelta · Tramo 1", from:"Shanghái", fromT:"00:05", to:"Dubái", toT:"04:45", cost:null},
+  {id:"f4", date:"2026-08-31", label:"Vuelta · Tramo 2", from:"Dubái", fromT:"07:45", to:"Madrid", toT:"13:30", cost:535},
+];
+const FLIGHTS_PP_TOTAL = 1091.75;
+
+const DAYS = [
+{ id:"d19", date:"2026-08-19", dow:"Miércoles", city:"Pekín",
+  hotel:{id:"d19-hotel", name:"Yitel (Beijing Tiananmen · Wangfujing Subway Station)", address:"1st Floor, Gongmei Building, No. 200 Wangfujing Street, Distrito de Dongcheng, Pekín, China", nights:3, defBookedBy:null, defCost:null},
+  groups:[
+    {id:"d19-g1", title:"Templos, Hutongs y Cultura Local", duration:"7,5 a 8,5 horas", items:[
+      {id:"d19-a1", title:"Templo de Lama (Yonghe)", duration:"1.5 a 2 horas", star:true},
+      {id:"d19-a2", title:"Callejuelas de Yonghe Street y Hutongs de Gulou", duration:"2 horas"},
+      {id:"d19-a3", title:"Torres del Tambor y de la Campana + Nanluoguxiang", duration:"2 a 2.5 horas"},
+      {id:"d19-a4", title:"Cena en Gui Street (Ghost Street)", duration:"2 horas", star:true},
+    ]}
+  ]},
+{ id:"d20", date:"2026-08-20", dow:"Jueves", city:"Pekín",
+  groups:[
+    {id:"d20-g1", title:"La Gran Muralla (Mutianyu)", duration:"7 a 8 horas", star:true, costItem:{id:"d20-a1", defBookedBy:"Mallo", defCost:68.64}, items:[
+      {id:"d20-a2", title:"Tramo de Mutianyu (transporte)", duration:"1.5 a 2 horas"},
+    ]}
+  ]},
+{ id:"d21", date:"2026-08-21", dow:"Viernes", city:"Pekín",
+  groups:[
+    {id:"d21-g1", title:"El Eje Imperial (todo a pie, de sur a norte)", duration:"6,5 a 8,5 horas", items:[
+      {id:"d21-a1", title:"Qianmen / Dashilar", duration:"1.5 a 2 horas"},
+      {id:"d21-a2", title:"Plaza de Tiananmen", duration:"45 min a 1 hora", star:true, defBookedBy:"Mallo", defCost:188.76},
+      {id:"d21-a3", title:"La Ciudad Prohibida", duration:"3 a 4 horas", star:true, defBookedBy:"Mallo", defCost:null},
+      {id:"d21-a4", title:"Parque Jingshan (Colina del Carbón)", duration:"1 a 1.5 horas"},
+    ]}
+  ]},
+{ id:"d22", date:"2026-08-22", dow:"Sábado", city:"Pekín → Xi'an",
+  transport:{id:"d22-t1", route:"Beijing Xi (Oeste) → Xi'an Bei (Norte)", detail:"Salida 12:55 · Llegada 17:08 · Duración 4h 13min", defBookedBy:"Mallo", defCost:347.92},
+  hotel:{id:"d22-hotel", name:"Jiaya Hotel (Jiaotong University · Xingqing Campus Park South Road Subway Station)", address:"No. 139, North Entrance of Gongyuan South Road, Xincheng, Xi'an, Shaanxi, China", nights:2, defBookedBy:null, defCost:null},
+  groups:[
+    {id:"d22-g1", title:"Toma de contacto en Xi'an", duration:null, items:[
+      {id:"d22-a1", title:"Paseo por el Centro Histórico (Torres de la Campana y el Tambor)", duration:"1 a 2 horas"},
+      {id:"d22-a2", title:"Ruta gastronómica en el Barrio Musulmán", duration:"2 a 3 horas"},
+    ]}
+  ]},
+{ id:"d23", date:"2026-08-23", dow:"Domingo", city:"Xi'an",
+  groups:[
+    {id:"d23-g1", title:"Guerreros de Terracota y alrededores", duration:null, items:[
+      {id:"d23-a1", title:"Guerreros de Terracota", duration:"4 a 5 horas (incl. trayectos)", star:true, link:"https://www.civitatis.com/es/xian/entrada-museo-guerreros-terracota/", defBookedBy:"Mallo", defCost:83.8},
+      {id:"d23-a2", title:"Gran Pagoda de la Oca Salvaje", duration:"2 horas", star:true, note:"Sacar entrada allí (6 € aprox.)"},
+      {id:"d23-a3", title:"Show de Fuentes y Avenida Dinastía Tang", duration:"2 horas"},
+    ]}
+  ]},
+{ id:"d24", date:"2026-08-24", dow:"Lunes", city:"Xi'an → Hangzhou",
+  transport:{id:"d24-t1", route:"Xi'an Bei (Norte) → Hangzhou Oeste", detail:"Salida 8:18 · Llegada 14:49 · Duración 6h 31min", defBookedBy:"Mallo", defCost:421.44},
+  hotel:{id:"d24-hotel", name:"Atour Hotel — West Lake Cultural Plaza", address:"Shangtang Road, Hangzhou", link:"https://www.hotelsinhangzhou.net/en/property/atour-west-lake-cultural-plaza-shangtang-road.html", nights:2, defBookedBy:"Mallo", defCost:159.26},
+  groups:[
+    {id:"d24-g1", title:"Llegada a Hangzhou", duration:null, items:[
+      {id:"d24-a1", title:"Llegada a Hangzhou y toma de contacto", duration:null},
+      {id:"d24-a2", title:"Paseo nocturno por la Calle Peatonal Hefang", duration:null},
+    ]}
+  ]},
+{ id:"d25", date:"2026-08-25", dow:"Martes", city:"Hangzhou",
+  groups:[
+    {id:"d25-g1", title:"Naturaleza y Templos Históricos", duration:"7,5 a 9 horas", note:"Llevar calzado cómodo", items:[
+      {id:"d25-a1", title:"Lago del Oeste (West Lake) en barca o bici", duration:"3 a 4 horas", star:true, note:"Comprar entrada combinada allí"},
+      {id:"d25-a2", title:"Templo Lingyin y Cuevas de Feilai Feng", duration:"2.5 a 3 horas", star:true, note:"Ideal ir en taxi o Didi"},
+      {id:"d25-a3", title:"Terrazas de té en el pueblo de Longjing", duration:"2 horas"},
+    ]}
+  ]},
+{ id:"d26", date:"2026-08-26", dow:"Miércoles", city:"Hangzhou → Suzhou",
+  transport:{id:"d26-t1", route:"Hangzhou Este → Suzhou", detail:"Salida 8:09 · Llegada 10:03 · Duración 1h 54min", defBookedBy:"Mallo", defCost:76.28},
+  hotel:{id:"d26-hotel", name:"Ibis Suzhou", address:"Suzhou", nights:1, defBookedBy:"Mallo", defCost:78.48},
+  groups:[
+    {id:"d26-g1", title:"Un día entero en Suzhou (la Venecia de Oriente)", duration:"6,5 a 8 horas", note:"Reservar online con 2 días de antelación", items:[
+      {id:"d26-a1", title:"Jardín del Humilde Administrador", duration:"2.5 a 3 horas", star:true, note:"Pasear a pie o en barca tradicional"},
+      {id:"d26-a2", title:"Calle Histórica Pingjiang y canales tradicionales", duration:"2 a 3 horas", note:"Sacar entrada en taquilla"},
+      {id:"d26-a3", title:"Colina del Tigre (Pagoda inclinada Yunyan)", duration:"2 horas"},
+    ]}
+  ]},
+{ id:"d27", date:"2026-08-27", dow:"Jueves", city:"Suzhou → Shanghái",
+  transport:{id:"d27-t1", route:"Suzhou → Shanghái", detail:"Salida 17:08 · Llegada 17:50 · Duración 42min", note:"Entrada barata en taquilla", defBookedBy:"Mallo", defCost:30.36},
+  hotel:{id:"d27-hotel", name:"Tonight Homestay West", address:"Baoshan, Shanghái", link:"https://www.agoda.com/guisu-homestay-baoshan-branch/hotel/shanghai-cn.html", nights:3, defBookedBy:"Mallo", defCost:373.62},
+  groups:[
+    {id:"d27-g1", title:"Llegada a la Megalópolis y Tradición", duration:"6 a 7,5 horas", note:"Entrada barata en taquilla", items:[
+      {id:"d27-a1", title:"Jardín Yuyuan y Bazar de la zona antigua", duration:"2 a 2.5 horas", star:true, note:"Gratuito"},
+      {id:"d27-a2", title:"Calle comercial peatonal Nanjing Road", duration:"2 horas", note:"Gratuito (las luces se encienden a las 19h)"},
+      {id:"d27-a3", title:"El Bund al atardecer (encendido de luces)", duration:"2 horas", star:true},
+    ]}
+  ]},
+{ id:"d28", date:"2026-08-28", dow:"Viernes", city:"Shanghái",
+  groups:[
+    {id:"d28-g1", title:"El Shanghái del Siglo XXI y Concesión Francesa", duration:"6,5 a 8 horas", note:"Comprar ticket en web oficial o Trip.com", items:[
+      {id:"d28-a1", title:"Subida a la Torre de Shanghái (Pudong)", duration:"2 a 2.5 horas", star:true, note:"Gratuito"},
+      {id:"d28-a2", title:"Paseo por la Antigua Concesión Francesa", duration:"2.5 a 3 horas", note:"Zona de compras y arte, gratuito"},
+      {id:"d28-a3", title:"Callejones de Tianzifang", duration:"2 horas"},
+    ]}
+  ]},
+{ id:"d29", date:"2026-08-29", dow:"Sábado", city:"Shanghái",
+  groups:[
+    {id:"d29-g1", title:"Cultura, Templos y Vistas desde el Río", duration:"5,5 a 7 horas", note:"Sacar entrada en taquilla", items:[
+      {id:"d29-a1", title:"Templo del Buda de Jade", duration:"1.5 a 2 horas"},
+      {id:"d29-a2", title:"Tarde libre de compras o visitas culturales", duration:"2 a 3 horas"},
+      {id:"d29-a3", title:"Crucero nocturno por el río Huangpu", duration:"2 horas", star:true, note:"Se puede reservar en el mismo embarcadero"},
+    ]}
+  ]},
+{ id:"d30", date:"2026-08-30", dow:"Domingo", city:"Shanghái → España",
+  groups:[
+    {id:"d30-g1", title:"Fin del viaje y traslado al aeropuerto", duration:"—", items:[]}
+  ]},
+{ id:"d31", date:"2026-08-31", dow:"Lunes", city:"Llegada a España",
+  groups:[
+    {id:"d31-g1", title:"Vuelo de vuelta: Shanghái ✈ Dubái ✈ Madrid", duration:"Ver pestaña Vuelos", items:[]}
+  ]},
+];
+
+/* =========================================================
+   FIREBASE — datos compartidos en tiempo real
+   ========================================================= */
+const FIREBASE_READY = firebaseConfig.apiKey !== "TU_API_KEY_AQUI";
+let db = null;
+let tripRef = null;
+
+// EDITS shape kept in sync with Firebase: { fields:{[id]:{bookedBy,cost,done,note}}, removed:{[id]:true}, custom:{[groupId]:{[customId]:{id,title,duration}}} }
+let EDITS = { fields:{}, removed:{}, custom:{} };
+let WHOAMI = localStorage.getItem('china-trip-whoami') || "";
+let pendingRemoteRender = false;
+let connected = FIREBASE_READY;
+
+// Firebase modules are only fetched from the CDN when a real project is
+// configured, so the app works offline/without a backend during setup.
+let fbSet = null, fbRef = null;
+
+async function initFirebase(){
+  if(!FIREBASE_READY){
+    try{ EDITS = JSON.parse(localStorage.getItem('china-trip-edits-local') || '{"fields":{},"removed":{},"custom":{}}'); }
+    catch(e){ EDITS = { fields:{}, removed:{}, custom:{} }; }
+    renderStorageBanner();
+    renderConnStatus();
+    renderCurrentTab();
+    return;
+  }
+  try{
+    const [{ initializeApp }, { getDatabase, ref, onValue, set }] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js'),
+    ]);
+    fbSet = set; fbRef = ref;
+    const app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    tripRef = ref(db, TRIP_PATH);
+
+    onValue(ref(db, '.info/connected'), (snap)=>{
+      connected = !!snap.val();
+      renderConnStatus();
+    });
+
+    onValue(tripRef, (snap)=>{
+      const val = snap.val();
+      EDITS = { fields:{}, removed:{}, custom:{}, ...(val||{}) };
+      if(isEditingNow()){ pendingRemoteRender = true; }
+      else { renderCurrentTab(); }
+    });
+  }catch(e){
+    connected = false;
+    db = null;
+    showToast("No se pudo conectar con Firebase — revisa firebase-config.js");
+    renderConnStatus();
+  }
+}
+
+function isEditingNow(){
+  const active = document.activeElement;
+  return active && (active.tagName === 'INPUT' || active.tagName === 'SELECT');
+}
+
+document.addEventListener('focusout', ()=>{
+  if(pendingRemoteRender){ pendingRemoteRender = false; renderCurrentTab(); }
+});
+
+async function writePath(path, value){
+  if(FIREBASE_READY && db && fbSet && fbRef){
+    try{
+      await fbSet(fbRef(db, `${TRIP_PATH}/${path}`), value);
+      showToast("Guardado ✓ — visible para todos");
+    }catch(e){
+      showToast("No se pudo guardar — comprueba tu conexión");
+    }
+  } else {
+    // local-only fallback, keep EDITS consistent with the path we just wrote
+    localStorage.setItem('china-trip-edits-local', JSON.stringify(EDITS));
+    showToast("Guardado solo en este dispositivo (Firebase sin configurar)");
+  }
+}
+
+function fieldVal(id, field, def){
+  const rec = EDITS.fields && EDITS.fields[id];
+  if(rec && rec[field] !== undefined && rec[field] !== "") return rec[field];
+  return def === undefined ? "" : def;
+}
+function setField(id, field, value){
+  EDITS.fields = EDITS.fields || {};
+  EDITS.fields[id] = EDITS.fields[id] || {};
+  EDITS.fields[id][field] = value;
+  writePath(`fields/${id}/${field}`, value);
+}
+
+function isRemoved(id){
+  return !!(EDITS.removed && EDITS.removed[id]);
+}
+function removeActivity(id){
+  EDITS.removed = EDITS.removed || {};
+  EDITS.removed[id] = true;
+  writePath(`removed/${id}`, true);
+  renderCurrentTab();
+}
+function getCustomItems(groupId){
+  const rec = (EDITS.custom && EDITS.custom[groupId]) || {};
+  return Object.keys(rec).map(k=>rec[k]);
+}
+function addCustomActivity(groupId, title, duration){
+  if(!title || !title.trim()) return;
+  const id = groupId + '-c' + Date.now();
+  const item = { id, title:title.trim(), duration:(duration||"").trim() };
+  EDITS.custom = EDITS.custom || {};
+  EDITS.custom[groupId] = EDITS.custom[groupId] || {};
+  EDITS.custom[groupId][id] = item;
+  writePath(`custom/${groupId}/${id}`, item);
+  openAddForms.delete(groupId);
+  renderCurrentTab();
+}
+function visibleItems(g){
+  const defaults = (g.items||[]).filter(it=>!isRemoved(it.id));
+  const customs = getCustomItems(g.id).filter(it=>!isRemoved(it.id));
+  return defaults.concat(customs);
+}
+
+function isMine(id, defBookedBy){
+  if(!WHOAMI) return false;
+  const bookedBy = fieldVal(id,'bookedBy', defBookedBy||"");
+  return bookedBy === WHOAMI;
+}
+
+function saveWhoAmI(name){
+  WHOAMI = name;
+  localStorage.setItem('china-trip-whoami', name);
+  renderWhoButtons();
+  renderCurrentTab();
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* =========================================================
+   RENDER HELPERS
+   ========================================================= */
+function whoOptions(selected){
+  let html = `<option value="">Sin asignar</option>`;
+  PEOPLE.forEach(p=>{
+    html += `<option value="${p}" ${p===selected?'selected':''}>${p}</option>`;
+  });
+  return html;
+}
+
+function editRow(id, defBookedBy, defCost, defNote){
+  const bookedBy = fieldVal(id,'bookedBy', defBookedBy||"");
+  const cost = fieldVal(id,'cost', defCost!==undefined&&defCost!==null?defCost:"");
+  const done = fieldVal(id,'done', bookedBy ? true : false);
+  const note = fieldVal(id,'note', defNote||"");
+  const sealClass = bookedBy ? "seal" : "seal empty";
+  const sealText = bookedBy ? bookedBy.slice(0,2).toUpperCase() : "?";
+  return `
+  <div class="edit-row" data-row="${id}">
+    <div class="${sealClass}" title="${escapeHtml(bookedBy ? bookedBy+' se encarga' : 'Sin asignar')}">${sealText}</div>
+    <select data-id="${id}" data-field="bookedBy">${whoOptions(bookedBy)}</select>
+    <input class="cost-input" type="number" step="0.01" placeholder="€ coste" data-id="${id}" data-field="cost" value="${cost}">
+    <label class="chk"><input type="checkbox" data-id="${id}" data-field="done" ${done?'checked':''}> Reservado</label>
+    <input class="note-input" type="text" placeholder="Nota / enlace…" data-id="${id}" data-field="note" value="${escapeHtml(note)}">
+  </div>`;
+}
+
+function escapeHtml(s){
+  return (s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ---------- CUSTOM / REMOVED ACTIVITIES ---------- */
+const openAddForms = new Set();
+
+function dayNum(dateStr){ return dateStr.split('-')[2]; }
+
+/* ---------- TAB: RESUMEN ---------- */
+function renderResumen(){
+  let html = `<h2 class="section-title">Resumen del viaje</h2>
+  <p class="section-sub">13 días recorriendo cinco ciudades. Toca "¿Quién eres?" arriba para ver resaltado lo que te toca a ti.</p>`;
+
+  html += `<div class="card"><div style="padding:16px 18px;">
+    <div class="block-title" style="margin-bottom:10px;">Ruta</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px;">
+      <span class="badge">Pekín</span> → <span class="badge">Xi'an</span> → <span class="badge">Hangzhou</span> → <span class="badge">Suzhou</span> → <span class="badge">Shanghái</span>
+    </div>
+  </div></div>`;
+
+  html += `<div class="card"><div style="padding:16px 18px;">
+    <div class="block-title" style="margin-bottom:8px;">Cómo funciona este panel</div>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin:0 0 6px;">Cada actividad, hotel y trayecto tiene una fila editable: quién se encarga de reservarlo, el coste, si ya está reservado y una nota libre. Cualquiera de los 4 puede editar — se guarda automáticamente y lo ven los demás.</p>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin:0;">🌟 marca los planes imprescindibles del día.</p>
+  </div></div>`;
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+/* ---------- TAB: VUELOS ---------- */
+function renderVuelos(){
+  let html = `<h2 class="section-title">Vuelos internacionales</h2>
+  <p class="section-sub">Coste medio por persona (billete completo ida y vuelta): <b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b></p>`;
+
+  const byDate = {};
+  FLIGHTS.forEach(f=>{ (byDate[f.date] = byDate[f.date]||[]).push(f); });
+
+  Object.keys(byDate).forEach(date=>{
+    const d = new Date(date+"T00:00:00");
+    const dateLabel = d.toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'});
+    html += `<div class="card"><div class="flight-card">
+      <div class="flight-date">${dateLabel}</div>`;
+    byDate[date].forEach(f=>{
+      html += `<div class="flight-route" style="margin-bottom:10px;">
+        <span class="flight-city">${f.from}</span>
+        <span class="flight-time">${f.fromT}</span>
+        <span class="flight-arrow">✈</span>
+        <span class="flight-city">${f.to}</span>
+        <span class="flight-time">${f.toT}</span>
+      </div>`;
+      html += editRow(f.id, null, f.cost);
+      html += `<div style="height:10px;"></div>`;
+    });
+    html += `</div></div>`;
+  });
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+/* ---------- TAB: ITINERARIO ---------- */
+function renderItinerario(){
+  let html = `<h2 class="section-title">Itinerario día a día</h2>
+  <p class="section-sub">18 – 31 de agosto de 2026</p>`;
+
+  DAYS.forEach(day=>{
+    let bodyHtml = `<div class="city-line"><h3>${day.city}</h3><span class="badge">${day.dow}</span></div>`;
+
+    if(day.hotel){
+      const h = day.hotel;
+      bodyHtml += `<div class="block">
+        <div class="block-head"><span class="block-icon">🛏️</span><span class="block-title">${h.name}</span><span class="block-dur">${h.nights} noche${h.nights>1?'s':''}</span></div>
+        ${h.address ? `<div class="block-address">${h.address}</div>` : ''}
+        ${h.link ? `<div class="block-address"><a href="${h.link}" target="_blank" rel="noopener">Ver alojamiento ↗</a></div>` : ''}
+        ${editRow(h.id, h.defBookedBy, h.defCost)}
+      </div>`;
+    }
+    if(day.transport){
+      const t = day.transport;
+      bodyHtml += `<div class="block">
+        <div class="block-head"><span class="block-icon">🚄</span><span class="block-title">${t.route}</span></div>
+        <div class="block-note" style="font-style:normal;">${t.detail}</div>
+        ${t.note ? `<div class="block-note">${t.note}</div>` : ''}
+        ${editRow(t.id, t.defBookedBy, t.defCost)}
+      </div>`;
+    }
+    (day.groups||[]).forEach(g=>{
+      bodyHtml += `<div class="block">
+        <div class="block-head">
+          ${g.star ? '<span class="star block-icon">🌟</span>' : '<span class="block-icon">📍</span>'}
+          <span class="block-title">${g.title}</span>
+          ${g.duration ? `<span class="block-dur">${g.duration}</span>` : ''}
+        </div>
+        ${g.note ? `<div class="block-note">${g.note}</div>` : ''}`;
+
+      if(g.costItem){
+        bodyHtml += editRow(g.costItem.id, g.costItem.defBookedBy, g.costItem.defCost);
+      }
+
+      const items = visibleItems(g);
+      if(items.length){
+        bodyHtml += `<ul class="activity-list">`;
+        items.forEach(it=>{
+          bodyHtml += `<li class="activity-item">
+            <div class="activity-head">
+              <div class="activity-text">
+                ${it.star ? '<span class="star">🌟 </span>' : ''}${escapeHtml(it.title)}
+                ${it.duration ? `<span class="a-dur">${escapeHtml(it.duration)}</span>` : ''}
+                ${it.link ? `<span class="a-note"><a href="${it.link}" target="_blank" rel="noopener">Enlace de reserva ↗</a></span>` : ''}
+                ${it.note ? `<span class="a-note">${escapeHtml(it.note)}</span>` : ''}
+              </div>
+              <button class="remove-btn" data-remove-id="${it.id}" title="Quitar actividad">🗑️</button>
+            </div>
+            ${editRow(it.id, it.defBookedBy, it.defCost)}
+          </li>`;
+        });
+        bodyHtml += `</ul>`;
+      }
+
+      bodyHtml += `
+        <button class="add-activity-btn" data-toggle-add="${g.id}">+ Añadir actividad</button>
+        <div class="add-activity-form ${openAddForms.has(g.id)?'open':''}" data-group-form="${g.id}">
+          <input class="add-title" type="text" placeholder="Nombre de la actividad">
+          <input class="add-dur" type="text" placeholder="Duración (opcional)">
+          <button type="button" class="add-confirm" data-submit-add="${g.id}">Añadir</button>
+        </div>`;
+
+      bodyHtml += `</div>`;
+    });
+
+    // highlight if any sub-item belongs to WHOAMI
+    let mine = false;
+    if(day.hotel && isMine(day.hotel.id, day.hotel.defBookedBy)) mine = true;
+    if(day.transport && isMine(day.transport.id, day.transport.defBookedBy)) mine = true;
+    (day.groups||[]).forEach(g=>{
+      if(g.costItem && isMine(g.costItem.id, g.costItem.defBookedBy)) mine = true;
+      visibleItems(g).forEach(it=>{ if(isMine(it.id, it.defBookedBy)) mine = true; });
+    });
+
+    html += `<div class="card ticket ${mine?'mine':''}">
+      <div class="stub">
+        <div class="day-n">${dayNum(day.date)}</div>
+        <div class="day-m">Ago 2026</div>
+        <div class="dow">${day.dow.slice(0,3)}</div>
+      </div>
+      <div class="divider"><div class="dash"></div></div>
+      <div class="ticket-body">${bodyHtml}</div>
+    </div>`;
+  });
+
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+/* ---------- TAB: HOTELES ---------- */
+function renderHoteles(){
+  let html = `<h2 class="section-title">Hoteles</h2>
+  <p class="section-sub">Un resumen rápido de dónde dormimos cada noche.</p>`;
+
+  DAYS.forEach(day=>{
+    if(!day.hotel) return;
+    const h = day.hotel;
+    html += `<div class="card"><div class="hotel-row">
+      <div class="hotel-icon">🛏️</div>
+      <div style="flex:1;min-width:0;">
+        <div class="hotel-name">${h.name}</div>
+        <div class="hotel-meta">Check-in ${day.date.split('-').reverse().join('/')} · ${h.nights} noche${h.nights>1?'s':''} · ${day.city}</div>
+        ${h.address ? `<div class="hotel-meta">${h.address}</div>`:''}
+        ${h.link ? `<div class="hotel-meta"><a href="${h.link}" target="_blank" rel="noopener">Ver alojamiento ↗</a></div>`:''}
+        ${editRow(h.id, h.defBookedBy, h.defCost)}
+      </div>
+    </div></div>`;
+  });
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+/* ---------- TAB: PRESUPUESTO ---------- */
+function collectAllCostItems(){
+  const items = [];
+  FLIGHTS.forEach(f=> items.push({id:f.id, defBookedBy:null, defCost:f.cost, label:`Vuelo ${f.from}→${f.to}`}));
+  DAYS.forEach(day=>{
+    if(day.hotel) items.push({id:day.hotel.id, defBookedBy:day.hotel.defBookedBy, defCost:day.hotel.defCost, label:`Hotel ${day.city}`});
+    if(day.transport) items.push({id:day.transport.id, defBookedBy:day.transport.defBookedBy, defCost:day.transport.defCost, label:`Trayecto ${day.transport.route}`});
+    (day.groups||[]).forEach(g=>{
+      if(g.costItem) items.push({id:g.costItem.id, defBookedBy:g.costItem.defBookedBy, defCost:g.costItem.defCost, label:g.title});
+      visibleItems(g).forEach(it=>{
+        items.push({id:it.id, defBookedBy:it.defBookedBy, defCost:it.defCost, label:it.title});
+      });
+    });
+  });
+  return items;
+}
+
+function renderPresupuesto(){
+  const items = collectAllCostItems();
+  const totals = {};
+  PEOPLE.forEach(p=> totals[p] = 0);
+  let grandTotal = 0;
+  let unassigned = 0;
+
+  items.forEach(it=>{
+    const bookedBy = fieldVal(it.id,'bookedBy', it.defBookedBy||"");
+    const costRaw = fieldVal(it.id,'cost', it.defCost);
+    const cost = parseFloat(costRaw) || 0;
+    grandTotal += cost;
+    if(bookedBy && totals[bookedBy] !== undefined) totals[bookedBy] += cost;
+    else if(cost>0) unassigned += cost;
+  });
+
+  const maxVal = Math.max(1, ...Object.values(totals));
+
+  let html = `<h2 class="section-title">Presupuesto</h2>
+  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado (no incluye el vuelo, que es fijo por persona: <b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b>).</p>`;
+
+  html += `<div class="total-banner">
+    <div><div class="lbl">Total gestionado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
+    <div><div class="lbl">Sin asignar</div><div class="amt" style="color:#fff;">${unassigned.toFixed(2)} €</div></div>
+  </div>`;
+
+  html += `<div class="budget-grid">`;
+  PEOPLE.forEach(p=>{
+    const amt = totals[p];
+    html += `<div class="budget-card">
+      <div class="budget-name">${p}</div>
+      <div class="budget-amt">${amt.toFixed(2)} €</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${(amt/maxVal*100).toFixed(0)}%"></div></div>
+      <div class="budget-sub">gestionado por ${p}</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Detalle de partidas</h3>`;
+  items.forEach(it=>{
+    const bookedBy = fieldVal(it.id,'bookedBy', it.defBookedBy||"");
+    const cost = fieldVal(it.id,'cost', it.defCost!==undefined&&it.defCost!==null?it.defCost:"");
+    if(cost==="" && !bookedBy) return;
+    html += `<div class="card"><div style="padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div style="font-size:13.5px;font-weight:600;">${escapeHtml(it.label)}</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span class="badge" style="background:var(--porcelain-2);color:var(--ink-soft);">${bookedBy||'sin asignar'}</span>
+        <span class="mono" style="font-weight:700;">${cost!==""?parseFloat(cost).toFixed(2)+' €':'—'}</span>
+      </div>
+    </div></div>`;
+  });
+
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+/* =========================================================
+   TABS
+   ========================================================= */
+const TABS = [
+  {id:'resumen', label:'Resumen', render:renderResumen},
+  {id:'vuelos', label:'Vuelos', render:renderVuelos},
+  {id:'itinerario', label:'Itinerario', render:renderItinerario},
+  {id:'hoteles', label:'Hoteles', render:renderHoteles},
+  {id:'presupuesto', label:'Presupuesto', render:renderPresupuesto},
+];
+let activeTab = 'itinerario';
+
+function renderTabbar(){
+  document.getElementById('tabbar').innerHTML = TABS.map(t=>
+    `<button class="tab-btn ${t.id===activeTab?'active':''}" data-tab="${t.id}">${t.label}</button>`
+  ).join('');
+}
+function renderCurrentTab(){
+  const tab = TABS.find(t=>t.id===activeTab);
+  if(tab) tab.render();
+}
+function renderWhoButtons(){
+  document.getElementById('whoButtons').outerHTML = `<div id="whoButtons" style="display:flex;gap:8px;flex-wrap:wrap;">` +
+    PEOPLE.map(p=>`<button class="who-btn ${p===WHOAMI?'active':''}" data-who="${p}">${p}</button>`).join('') +
+  `</div>`;
+}
+function renderConnStatus(){
+  const el = document.getElementById('connStatus');
+  if(!el) return;
+  if(!FIREBASE_READY){
+    el.className = 'conn-status offline';
+    el.innerHTML = `<span class="conn-dot"></span> Sin backend configurado`;
+    return;
+  }
+  el.className = 'conn-status ' + (connected ? 'online' : 'offline');
+  el.innerHTML = `<span class="conn-dot"></span> ${connected ? 'Sincronizado con el grupo' : 'Sin conexión — reintentando'}`;
+}
+function renderStorageBanner(){
+  document.getElementById('storageBanner').innerHTML = FIREBASE_READY ? '' :
+    `<div class="storage-banner">⚠️ El backend compartido (Firebase) todavía no está configurado. Los cambios que hagas ahora se guardan solo en <b>este dispositivo</b> y no los verán los demás. Edita <code>firebase-config.js</code> con los datos de vuestro proyecto de Firebase y vuelve a publicar — instrucciones en el <code>README.md</code>.</div>`;
+}
+
+/* ---------- Countdown ---------- */
+function updateCountdown(){
+  const target = new Date("2026-08-18T15:30:00+02:00").getTime();
+  const now = Date.now();
+  const diff = target - now;
+  const days = Math.max(0, Math.floor(diff/86400000));
+  const hours = Math.max(0, Math.floor((diff%86400000)/3600000));
+  document.getElementById('cd-days').textContent = diff>0 ? days : 0;
+  document.getElementById('cd-hours').textContent = diff>0 ? hours : 0;
+}
+
+/* =========================================================
+   EVENTS
+   ========================================================= */
+document.addEventListener('click', (e)=>{
+  const tabBtn = e.target.closest('[data-tab]');
+  if(tabBtn){
+    activeTab = tabBtn.dataset.tab;
+    renderTabbar();
+    renderCurrentTab();
+    window.scrollTo({top:0, behavior:'smooth'});
+    return;
+  }
+  const whoBtn = e.target.closest('[data-who]');
+  if(whoBtn){
+    const name = whoBtn.dataset.who;
+    saveWhoAmI(name === WHOAMI ? "" : name);
+    return;
+  }
+  const removeBtn = e.target.closest('[data-remove-id]');
+  if(removeBtn){
+    if(confirm('¿Quitar esta actividad para todos?')){
+      removeActivity(removeBtn.dataset.removeId);
+    }
+    return;
+  }
+  const toggleAddBtn = e.target.closest('[data-toggle-add]');
+  if(toggleAddBtn){
+    const gId = toggleAddBtn.dataset.toggleAdd;
+    if(openAddForms.has(gId)) openAddForms.delete(gId); else openAddForms.add(gId);
+    renderCurrentTab();
+    return;
+  }
+  const submitAddBtn = e.target.closest('[data-submit-add]');
+  if(submitAddBtn){
+    const gId = submitAddBtn.dataset.submitAdd;
+    const form = document.querySelector(`[data-group-form="${gId}"]`);
+    const title = form.querySelector('.add-title').value;
+    const dur = form.querySelector('.add-dur').value;
+    addCustomActivity(gId, title, dur);
+    return;
+  }
+});
+
+document.addEventListener('keydown', (e)=>{
+  if(e.key !== 'Enter') return;
+  const form = e.target.closest('[data-group-form]');
+  if(form && (e.target.classList.contains('add-title') || e.target.classList.contains('add-dur'))){
+    e.preventDefault();
+    const gId = form.dataset.groupForm;
+    const title = form.querySelector('.add-title').value;
+    const dur = form.querySelector('.add-dur').value;
+    addCustomActivity(gId, title, dur);
+  }
+});
+
+document.addEventListener('change', (e)=>{
+  const el = e.target;
+  if(!el.dataset || !el.dataset.field) return;
+  const id = el.dataset.id;
+  const field = el.dataset.field;
+  const value = el.type === 'checkbox' ? el.checked : el.value;
+  setField(id, field, value);
+  renderCurrentTab();
+});
+
+/* =========================================================
+   INIT
+   ========================================================= */
+(function init(){
+  renderStorageBanner();
+  renderTabbar();
+  renderWhoButtons();
+  renderConnStatus();
+  renderCurrentTab();
+  initFirebase();
+  updateCountdown();
+  setInterval(updateCountdown, 60000);
+})();

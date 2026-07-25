@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四人游中国 · Viaje a China 2026</title>
+<meta name="description" content="Guía e itinerario interactivo del viaje a China 2026 de Mallo, Lichu, Albertito y Nacho: vuelos, hoteles, actividades y presupuesto compartido.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Mallo · Lichu · Albertito · Nacho</p>
+    <h1>四人游中国 — Viaje a China</h1>
+    <p class="subtitle">18 — 31 de agosto de 2026 · Pekín → Xi'an → Hangzhou → Suzhou → Shanghái</p>
+    <div class="hero-row">
+      <div class="countdown">
+        <div>
+          <div class="num" id="cd-days">--</div>
+          <div class="lbl">días</div>
+        </div>
+        <div>
+          <div class="num" id="cd-hours">--</div>
+          <div class="lbl">horas</div>
+        </div>
+      </div>
+      <div class="stat-strip">
+        <div class="stat-chip">🗓️ 13 días</div>
+        <div class="stat-chip">🏙️ 5 ciudades</div>
+        <div class="stat-chip">🛏️ 6 hoteles</div>
+        <div class="stat-chip">🚄 5 trayectos internos</div>
+        <div class="stat-chip"><span id="connStatus" class="conn-status"><span class="conn-dot"></span> Conectando…</span></div>
+      </div>
+    </div>
+    <div class="who-picker">
+      <span>¿Quién eres?</span>
+      <div id="whoButtons"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tabbar">
+  <div class="tabbar-inner" id="tabbar"></div>
+</div>
+
+<div class="wrap">
+  <div id="storageBanner"></div>
+  <div id="tabContent"></div>
+</div>
+
+<footer>Panel vivo del viaje — editado por los 4. Los cambios se guardan automáticamente y los ve todo el grupo.</footer>
+<div class="toast" id="toast">Guardado ✓</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

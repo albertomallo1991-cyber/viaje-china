@@ -119,6 +119,74 @@ const DAYS = [
   ]},
 ];
 
+const TRAVEL_TIPS = [
+  "Instalar una VPN antes de salir de casa: Google, WhatsApp, Instagram y Maps no funcionan en China sin ella.",
+  "Alipay o WeChat Pay son la forma de pago habitual en casi todas partes — se pueden vincular a una tarjeta extranjera desde la propia app.",
+  "Didi (el Uber chino) funciona bien para moverse; tener la dirección de destino escrita en chino ayuda mucho con los taxis normales.",
+  "Llevar el pasaporte siempre encima: hace falta para check-in en hoteles y para pasar el control de seguridad de los trenes de alta velocidad.",
+  "En agosto hace calor y humedad en las cinco ciudades — ropa ligera, agua y protector solar, y dejar las visitas al aire libre para primera/última hora.",
+  "Una eSIM o SIM local (se compra fácil en el aeropuerto) evita depender del wifi para el traductor, los mapas o Didi.",
+  "Fuera de las zonas turísticas poca gente habla inglés — un traductor con cámara (o el propio WeChat) resuelve casi cualquier apuro.",
+];
+
+const CITY_GUIDE = [
+  { name:"Pekín",
+    history:"Capital de China durante la mayor parte de las dinastías Yuan, Ming y Qing — más de 700 años como centro del poder imperial. La Ciudad Prohibida fue el palacio del emperador durante casi 500 años, cerrado a cualquiera que no formara parte de la corte (de ahí el nombre).",
+    facts:[
+      "Pekín (北京) significa literalmente \"capital del norte\".",
+      "El tramo de Gran Muralla que se visita en Mutianyu forma parte de un sistema de murallas que, sumando todos sus tramos históricos, supera los 21.000 km.",
+      "Los hutongs son los antiguos callejones que rodean patios tradicionales (siheyuan); muchos han desaparecido con la modernización, pero los de Nanluoguxiang y Gulou se conservan.",
+    ],
+    tips:[
+      "La Ciudad Prohibida limita el aforo diario y las entradas se agotan con antelación — comprarlas online unos días antes.",
+      "El tramo de Mutianyu es bastante más tranquilo que Badaling para visitar la Gran Muralla.",
+    ]},
+  { name:"Xi'an",
+    history:"Bajo el nombre de Chang'an fue capital de China durante 13 dinastías y el punto de partida de la Ruta de la Seda — una de las ciudades más grandes y cosmopolitas del mundo antiguo.",
+    facts:[
+      "Los Guerreros de Terracota se descubrieron por accidente en 1974, cuando unos agricultores cavaban un pozo.",
+      "Se calculan más de 8.000 figuras en el ejército de terracota, cada una con rasgos faciales distintos.",
+      "La muralla urbana de la dinastía Ming se conserva casi completa — unos 14 km que se pueden recorrer en bici por encima.",
+    ],
+    tips:[
+      "Reservar la entrada a los Guerreros de Terracota con antelación y llegar pronto evita las peores aglomeraciones.",
+      "El Barrio Musulmán es la mejor zona para probar comida callejera (fideos biang biang, cordero a la brasa).",
+    ]},
+  { name:"Hangzhou",
+    history:"Capital de la dinastía Song del Sur y una de las ciudades más prósperas del mundo medieval. Marco Polo la describió como \"la ciudad más bella y suntuosa del mundo\".",
+    facts:[
+      "El Lago del Oeste es Patrimonio de la Humanidad por la UNESCO desde 2011.",
+      "Es la cuna del té Longjing (\"Pozo del Dragón\"), cultivado en las colinas junto al lago desde hace más de mil años.",
+      "Hoy es también la sede de Alibaba — tradición milenaria y tecnología punta conviven en la misma ciudad.",
+    ],
+    tips:[
+      "Pasear o alquilar una bici alrededor del lago al atardecer es de lo más recomendable.",
+      "En las terrazas de Longjing se puede comprar té directamente a los productores locales.",
+    ]},
+  { name:"Suzhou",
+    history:"Con más de 2.500 años de historia, Suzhou es famosa desde la dinastía Song por sus jardines privados y su producción de seda.",
+    facts:[
+      "Sus jardines clásicos, como el Jardín del Humilde Administrador, son Patrimonio de la Humanidad por la UNESCO.",
+      "Se la conoce como \"la Venecia de Oriente\" por su red de canales, algunos con más de mil años de antigüedad.",
+      "Ha sido durante siglos uno de los principales centros de producción de seda de China.",
+    ],
+    tips:[
+      "Los jardines más populares limitan las entradas — comprarlas con un par de días de antelación si es posible.",
+      "Pasear por la Calle Pingjiang junto al canal es la forma más tranquila de ver la ciudad antigua.",
+    ]},
+  { name:"Shanghái",
+    history:"Una pequeña ciudad portuaria hasta el siglo XIX, cuando pasó a ser puerto de tratado tras las Guerras del Opio. Las concesiones extranjeras (francesa, británica, americana) que se instalaron entonces marcaron para siempre su arquitectura.",
+    facts:[
+      "El Bund reúne edificios art déco y neoclásicos construidos por bancos y compañías extranjeras entre 1920 y 1930.",
+      "Al otro lado del río, Pudong eran en su mayoría campos hasta los años 90; hoy es uno de los distritos financieros más futuristas del mundo.",
+      "Es la ciudad más poblada de China, con más de 24 millones de habitantes.",
+    ],
+    tips:[
+      "El Bund es especialmente bonito al atardecer, cuando se encienden las luces de Pudong.",
+      "El metro es rápido, barato y fácil de usar pagando con Alipay o WeChat Pay.",
+    ]},
+];
+
 /* =========================================================
    FIREBASE — datos compartidos en tiempo real
    ========================================================= */
@@ -440,6 +508,31 @@ function renderItinerario(){
   document.getElementById('tabContent').innerHTML = html;
 }
 
+/* ---------- TAB: CIUDADES ---------- */
+function renderCiudades(){
+  let html = `<h2 class="section-title">Ciudades y consejos de viaje</h2>
+  <p class="section-sub">Un poco de historia y curiosidades de cada parada, más recomendaciones prácticas para moveros con soltura.</p>`;
+
+  html += `<div class="card"><div style="padding:16px 18px;">
+    <div class="block-title" style="margin-bottom:8px;">🧭 Recomendaciones generales del viaje</div>
+    <ul class="tip-list">${TRAVEL_TIPS.map(t=>`<li>${t}</li>`).join('')}</ul>
+  </div></div>`;
+
+  CITY_GUIDE.forEach(c=>{
+    html += `<div class="card"><div style="padding:16px 18px;">
+      <div class="city-line" style="margin-bottom:2px;"><h3>${c.name}</h3></div>
+      <div class="guide-kicker">Historia</div>
+      <p class="guide-text">${c.history}</p>
+      <div class="guide-kicker">Datos curiosos</div>
+      <ul class="tip-list">${c.facts.map(f=>`<li>${f}</li>`).join('')}</ul>
+      <div class="guide-kicker">Recomendaciones</div>
+      <ul class="tip-list">${c.tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+    </div></div>`;
+  });
+
+  document.getElementById('tabContent').innerHTML = html;
+}
+
 /* ---------- TAB: HOTELES ---------- */
 function renderHoteles(){
   let html = `<h2 class="section-title">Hoteles</h2>
@@ -463,9 +556,11 @@ function renderHoteles(){
 }
 
 /* ---------- TAB: PRESUPUESTO ---------- */
+// Los vuelos quedan fuera: cada uno paga el suyo por su cuenta (mismo importe
+// para los 4, ver FLIGHTS_PP_TOTAL), así que no forman parte del bote común
+// que se reparte entre los 4 aquí abajo.
 function collectAllCostItems(){
   const items = [];
-  FLIGHTS.forEach(f=> items.push({id:f.id, defBookedBy:null, defCost:f.cost, label:`Vuelo ${f.from}→${f.to}`}));
   DAYS.forEach(day=>{
     if(day.hotel) items.push({id:day.hotel.id, defBookedBy:day.hotel.defBookedBy, defCost:day.hotel.defCost, label:`Hotel ${day.city}`});
     if(day.transport) items.push({id:day.transport.id, defBookedBy:day.transport.defBookedBy, defCost:day.transport.defCost, label:`Trayecto ${day.transport.route}`});
@@ -496,23 +591,31 @@ function renderPresupuesto(){
   });
 
   const maxVal = Math.max(1, ...Object.values(totals));
+  const fairShare = grandTotal / PEOPLE.length;
 
   let html = `<h2 class="section-title">Presupuesto</h2>
-  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado (no incluye el vuelo, que es fijo por persona: <b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b>).</p>`;
+  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado. Los vuelos quedan fuera del reparto porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona). Todo lo demás (hoteles, trenes, actividades) se reparte a partes iguales entre los 4.</p>`;
 
   html += `<div class="total-banner">
     <div><div class="lbl">Total gestionado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
+    <div><div class="lbl">Por pasajero (÷4)</div><div class="amt">${fairShare.toFixed(2)} €</div></div>
     <div><div class="lbl">Sin asignar</div><div class="amt" style="color:#fff;">${unassigned.toFixed(2)} €</div></div>
   </div>`;
 
   html += `<div class="budget-grid">`;
   PEOPLE.forEach(p=>{
     const amt = totals[p];
+    const balance = amt - fairShare;
+    let balanceLabel, balanceClass;
+    if(Math.abs(balance) < 0.01){ balanceLabel = 'En paz'; balanceClass = 'even'; }
+    else if(balance > 0){ balanceLabel = `Le deben ${balance.toFixed(2)} €`; balanceClass = 'owed'; }
+    else { balanceLabel = `Debe ${Math.abs(balance).toFixed(2)} €`; balanceClass = 'owes'; }
     html += `<div class="budget-card">
       <div class="budget-name">${p}</div>
       <div class="budget-amt">${amt.toFixed(2)} €</div>
       <div class="bar-wrap"><div class="bar-fill" style="width:${(amt/maxVal*100).toFixed(0)}%"></div></div>
-      <div class="budget-sub">gestionado por ${p}</div>
+      <div class="budget-sub">gestionado por ${p} · le toca ${fairShare.toFixed(2)} €</div>
+      <div class="budget-balance ${balanceClass}">${balanceLabel}</div>
     </div>`;
   });
   html += `</div>`;
@@ -540,6 +643,7 @@ function renderPresupuesto(){
 const TABS = [
   {id:'resumen', label:'Resumen', render:renderResumen},
   {id:'vuelos', label:'Vuelos', render:renderVuelos},
+  {id:'ciudades', label:'Ciudades', render:renderCiudades},
   {id:'itinerario', label:'Itinerario', render:renderItinerario},
   {id:'hoteles', label:'Hoteles', render:renderHoteles},
   {id:'presupuesto', label:'Presupuesto', render:renderPresupuesto},

@@ -194,8 +194,8 @@ const FIREBASE_READY = firebaseConfig.apiKey !== "TU_API_KEY_AQUI";
 let db = null;
 let tripRef = null;
 
-// EDITS shape kept in sync with Firebase: { fields:{[id]:{bookedBy,cost,done,note}}, removed:{[id]:true}, custom:{[groupId]:{[customId]:{id,title,duration}}} }
-let EDITS = { fields:{}, removed:{}, custom:{} };
+// EDITS shape kept in sync with Firebase: { fields:{[id]:{bookedBy,cost,done,note}}, removed:{[id]:true}, custom:{[groupId]:{[customId]:{id,title,duration}}}, expenses:{[expenseId]:{id,date,concept,detail,amount,paidBy}} }
+let EDITS = { fields:{}, removed:{}, custom:{}, expenses:{} };
 let WHOAMI = localStorage.getItem('china-trip-whoami') || "";
 let pendingRemoteRender = false;
 let connected = FIREBASE_READY;
@@ -206,8 +206,8 @@ let fbSet = null, fbRef = null;
 
 async function initFirebase(){
   if(!FIREBASE_READY){
-    try{ EDITS = JSON.parse(localStorage.getItem('china-trip-edits-local') || '{"fields":{},"removed":{},"custom":{}}'); }
-    catch(e){ EDITS = { fields:{}, removed:{}, custom:{} }; }
+    try{ EDITS = { fields:{}, removed:{}, custom:{}, expenses:{}, ...JSON.parse(localStorage.getItem('china-trip-edits-local') || '{}') }; }
+    catch(e){ EDITS = { fields:{}, removed:{}, custom:{}, expenses:{} }; }
     renderStorageBanner();
     renderConnStatus();
     renderCurrentTab();
@@ -230,7 +230,7 @@ async function initFirebase(){
 
     onValue(tripRef, (snap)=>{
       const val = snap.val();
-      EDITS = { fields:{}, removed:{}, custom:{}, ...(val||{}) };
+      EDITS = { fields:{}, removed:{}, custom:{}, expenses:{}, ...(val||{}) };
       if(isEditingNow()){ pendingRemoteRender = true; }
       else { renderCurrentTab(); }
     });
@@ -306,6 +306,31 @@ function visibleItems(g){
   const defaults = (g.items||[]).filter(it=>!isRemoved(it.id));
   const customs = getCustomItems(g.id).filter(it=>!isRemoved(it.id));
   return defaults.concat(customs);
+}
+
+/* ---------- GASTOS (registro libre de gastos) ---------- */
+function getExpenses(){
+  const rec = EDITS.expenses || {};
+  return Object.keys(rec).map(k=>rec[k]).sort((a,b)=>{
+    if(a.date !== b.date) return (b.date||"").localeCompare(a.date||"");
+    return (b.id||"").localeCompare(a.id||"");
+  });
+}
+function addExpense(date, concept, detail, amount, paidBy){
+  if(!concept || !concept.trim()) return;
+  const amt = parseFloat(amount);
+  if(!amt || amt <= 0) return;
+  const id = 'exp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+  const item = { id, date: date || new Date().toISOString().slice(0,10), concept: concept.trim(), detail: (detail||"").trim(), amount: amt, paidBy: paidBy || "" };
+  EDITS.expenses = EDITS.expenses || {};
+  EDITS.expenses[id] = item;
+  writePath(`expenses/${id}`, item);
+  renderCurrentTab();
+}
+function removeExpense(id){
+  if(EDITS.expenses) delete EDITS.expenses[id];
+  writePath(`expenses/${id}`, null);
+  renderCurrentTab();
 }
 
 function isMine(id, defBookedBy){
@@ -555,6 +580,48 @@ function renderHoteles(){
   document.getElementById('tabContent').innerHTML = html;
 }
 
+/* ---------- TAB: GASTOS ---------- */
+function renderGastos(){
+  const today = new Date().toISOString().slice(0,10);
+  let html = `<h2 class="section-title">Gastos del viaje</h2>
+  <p class="section-sub">Registra aquí cualquier gasto suelto (taxis, comidas, entradas de última hora...). Se suma automáticamente al reparto de la pestaña Presupuesto.</p>`;
+
+  html += `<div class="card"><div style="padding:16px 18px;">
+    <div class="block-title" style="margin-bottom:10px;">➕ Añadir gasto</div>
+    <div class="add-activity-form open" data-expense-form>
+      <input class="exp-date" type="date" data-exp="date" value="${today}">
+      <input class="exp-concept" type="text" data-exp="concept" placeholder="Concepto (p.ej. Taxi, Comida...)">
+      <input class="exp-detail" type="text" data-exp="detail" placeholder="Detalle (opcional)">
+      <input class="exp-amount" type="number" step="0.01" data-exp="amount" placeholder="€ importe">
+      <select class="exp-paidby" data-exp="paidBy">${whoOptions("")}</select>
+      <button type="button" class="add-confirm" data-submit-expense>Añadir gasto</button>
+    </div>
+  </div></div>`;
+
+  const expenses = getExpenses();
+  if(!expenses.length){
+    html += `<p class="empty-note">Todavía no hay gastos registrados.</p>`;
+  } else {
+    html += `<div class="card"><div style="padding:4px 18px;">`;
+    expenses.forEach(e=>{
+      html += `<div class="expense-row">
+        <div class="expense-main">
+          <div class="expense-concept">${escapeHtml(e.concept)}</div>
+          <div class="expense-meta">${e.date.split('-').reverse().join('/')}${e.detail ? ' · ' + escapeHtml(e.detail) : ''}</div>
+        </div>
+        <div class="expense-side">
+          <span class="badge" style="background:var(--porcelain-2);color:var(--ink-soft);">${e.paidBy||'sin asignar'}</span>
+          <span class="mono expense-amt">${parseFloat(e.amount).toFixed(2)} €</span>
+          <button class="remove-btn" data-remove-expense-id="${e.id}" title="Quitar gasto">🗑️</button>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  document.getElementById('tabContent').innerHTML = html;
+}
+
 /* ---------- TAB: PRESUPUESTO ---------- */
 // Los vuelos quedan fuera: cada uno paga el suyo por su cuenta (mismo importe
 // para los 4, ver FLIGHTS_PP_TOTAL), así que no forman parte del bote común
@@ -590,11 +657,19 @@ function renderPresupuesto(){
     else if(cost>0) unassigned += cost;
   });
 
+  const expenses = getExpenses();
+  expenses.forEach(e=>{
+    const amt = parseFloat(e.amount) || 0;
+    grandTotal += amt;
+    if(e.paidBy && totals[e.paidBy] !== undefined) totals[e.paidBy] += amt;
+    else if(amt>0) unassigned += amt;
+  });
+
   const maxVal = Math.max(1, ...Object.values(totals));
   const fairShare = grandTotal / PEOPLE.length;
 
   let html = `<h2 class="section-title">Presupuesto</h2>
-  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado. Los vuelos quedan fuera del reparto porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona). Todo lo demás (hoteles, trenes, actividades) se reparte a partes iguales entre los 4.</p>`;
+  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado, incluyendo los gastos sueltos de la pestaña <b>Gastos</b>. Los vuelos quedan fuera del reparto porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona). Todo lo demás (hoteles, trenes, actividades, gastos sueltos) se reparte a partes iguales entre los 4.</p>`;
 
   html += `<div class="total-banner">
     <div><div class="lbl">Total gestionado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
@@ -620,7 +695,7 @@ function renderPresupuesto(){
   });
   html += `</div>`;
 
-  html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Detalle de partidas</h3>`;
+  html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Detalle de partidas del itinerario</h3>`;
   items.forEach(it=>{
     const bookedBy = fieldVal(it.id,'bookedBy', it.defBookedBy||"");
     const cost = fieldVal(it.id,'cost', it.defCost!==undefined&&it.defCost!==null?it.defCost:"");
@@ -634,6 +709,19 @@ function renderPresupuesto(){
     </div></div>`;
   });
 
+  if(expenses.length){
+    html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Gastos sueltos registrados</h3>`;
+    expenses.forEach(e=>{
+      html += `<div class="card"><div style="padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span></div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="badge" style="background:var(--porcelain-2);color:var(--ink-soft);">${e.paidBy||'sin asignar'}</span>
+          <span class="mono" style="font-weight:700;">${parseFloat(e.amount).toFixed(2)} €</span>
+        </div>
+      </div></div>`;
+    });
+  }
+
   document.getElementById('tabContent').innerHTML = html;
 }
 
@@ -646,6 +734,7 @@ const TABS = [
   {id:'ciudades', label:'Ciudades', render:renderCiudades},
   {id:'itinerario', label:'Itinerario', render:renderItinerario},
   {id:'hoteles', label:'Hoteles', render:renderHoteles},
+  {id:'gastos', label:'Gastos', render:renderGastos},
   {id:'presupuesto', label:'Presupuesto', render:renderPresupuesto},
 ];
 let activeTab = 'itinerario';
@@ -732,17 +821,46 @@ document.addEventListener('click', (e)=>{
     addCustomActivity(gId, title, dur);
     return;
   }
+  const removeExpenseBtn = e.target.closest('[data-remove-expense-id]');
+  if(removeExpenseBtn){
+    if(confirm('¿Quitar este gasto para todos?')){
+      removeExpense(removeExpenseBtn.dataset.removeExpenseId);
+    }
+    return;
+  }
+  const submitExpenseBtn = e.target.closest('[data-submit-expense]');
+  if(submitExpenseBtn){
+    submitExpenseForm();
+    return;
+  }
 });
+
+function submitExpenseForm(){
+  const form = document.querySelector('[data-expense-form]');
+  if(!form) return;
+  const date = form.querySelector('[data-exp="date"]').value;
+  const concept = form.querySelector('[data-exp="concept"]').value;
+  const detail = form.querySelector('[data-exp="detail"]').value;
+  const amount = form.querySelector('[data-exp="amount"]').value;
+  const paidBy = form.querySelector('[data-exp="paidBy"]').value;
+  addExpense(date, concept, detail, amount, paidBy);
+}
 
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Enter') return;
-  const form = e.target.closest('[data-group-form]');
-  if(form && (e.target.classList.contains('add-title') || e.target.classList.contains('add-dur'))){
+  const groupForm = e.target.closest('[data-group-form]');
+  if(groupForm && (e.target.classList.contains('add-title') || e.target.classList.contains('add-dur'))){
     e.preventDefault();
-    const gId = form.dataset.groupForm;
-    const title = form.querySelector('.add-title').value;
-    const dur = form.querySelector('.add-dur').value;
+    const gId = groupForm.dataset.groupForm;
+    const title = groupForm.querySelector('.add-title').value;
+    const dur = groupForm.querySelector('.add-dur').value;
     addCustomActivity(gId, title, dur);
+    return;
+  }
+  const expenseForm = e.target.closest('[data-expense-form]');
+  if(expenseForm && e.target.tagName === 'INPUT'){
+    e.preventDefault();
+    submitExpenseForm();
   }
 });
 

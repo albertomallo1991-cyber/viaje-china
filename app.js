@@ -324,13 +324,13 @@ function getExpenses(){
     return (b.id||"").localeCompare(a.id||"");
   });
 }
-function addExpense(date, concept, detail, amount, paidBy, chargedTo){
+function addExpense(date, concept, detail, amount, paidBy, chargedTo, isSettlement){
   if(!concept || !concept.trim()) return;
   const amt = parseFloat(amount);
   if(!amt || amt <= 0) return;
   const charged = (chargedTo && chargedTo.length) ? chargedTo.filter(p=>PEOPLE.includes(p)) : PEOPLE.slice();
   const id = 'exp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
-  const item = { id, date: date || new Date().toISOString().slice(0,10), concept: concept.trim(), detail: (detail||"").trim(), amount: amt, paidBy: paidBy || "", chargedTo: charged };
+  const item = { id, date: date || new Date().toISOString().slice(0,10), concept: concept.trim(), detail: (detail||"").trim(), amount: amt, paidBy: paidBy || "", chargedTo: charged, isSettlement: !!isSettlement };
   EDITS.expenses = EDITS.expenses || {};
   EDITS.expenses[id] = item;
   writePath(`expenses/${id}`, item);
@@ -345,12 +345,18 @@ function removeExpense(id){
 
 /* ---------- LEDGER (saldos entre los 4, estilo Splitwise) ---------- */
 // Cada partida del itinerario se reparte siempre entre los 4 (comportamiento
-// de siempre). Cada gasto suelto se reparte entre quien esté en su
-// "chargedTo". balance[p] = lo que p ha pagado - lo que le corresponde pagar.
-// balance > 0 -> le deben; balance < 0 -> debe.
+// de siempre). Cada gasto suelto NO marcado como liquidación se reparte
+// entre quien esté en su "chargedTo" y cuenta como coste real del viaje.
+//
+// Una liquidación (isSettlement=true, p.ej. "Albertito paga 500€ a Mallo")
+// NO es un coste del viaje: no infla el total ni la parte de nadie, solo
+// mueve saldo directamente de quien paga a quien cobra. Así, el importe
+// "pagado" que se muestra por persona converge a ser el mismo para los 4
+// una vez todo está liquidado, en vez de quedarse con el dinero que cada
+// uno adelantó en bruto (que no baja aunque le hayan devuelto el dinero).
 function buildLedger(){
-  const totalPaid = {}, totalOwed = {};
-  PEOPLE.forEach(p=>{ totalPaid[p]=0; totalOwed[p]=0; });
+  const realPaid = {}, totalOwed = {}, settleSent = {}, settleReceived = {};
+  PEOPLE.forEach(p=>{ realPaid[p]=0; totalOwed[p]=0; settleSent[p]=0; settleReceived[p]=0; });
   let grandTotal = 0, unassignedPaid = 0;
 
   collectAllCostItems().forEach(it=>{
@@ -358,7 +364,7 @@ function buildLedger(){
     const cost = parseFloat(fieldVal(it.id,'cost', it.defCost)) || 0;
     if(cost<=0) return;
     grandTotal += cost;
-    if(payer && totalPaid[payer]!==undefined) totalPaid[payer] += cost;
+    if(payer && realPaid[payer]!==undefined) realPaid[payer] += cost;
     else unassignedPaid += cost;
     const share = cost / PEOPLE.length;
     PEOPLE.forEach(p=> totalOwed[p] += share);
@@ -368,16 +374,24 @@ function buildLedger(){
   expenses.forEach(e=>{
     const amt = parseFloat(e.amount) || 0;
     if(amt<=0) return;
-    grandTotal += amt;
-    if(e.paidBy && totalPaid[e.paidBy]!==undefined) totalPaid[e.paidBy] += amt;
-    else unassignedPaid += amt;
     const charged = (e.chargedTo && e.chargedTo.length) ? e.chargedTo.filter(p=>PEOPLE.includes(p)) : PEOPLE.slice();
     const share = amt / (charged.length || 1);
-    charged.forEach(p=>{ if(totalOwed[p]!==undefined) totalOwed[p] += share; });
+    if(e.isSettlement){
+      if(e.paidBy && settleSent[e.paidBy]!==undefined) settleSent[e.paidBy] += amt;
+      charged.forEach(p=>{ if(settleReceived[p]!==undefined) settleReceived[p] += share; });
+    } else {
+      grandTotal += amt;
+      if(e.paidBy && realPaid[e.paidBy]!==undefined) realPaid[e.paidBy] += amt;
+      else unassignedPaid += amt;
+      charged.forEach(p=>{ if(totalOwed[p]!==undefined) totalOwed[p] += share; });
+    }
   });
 
-  const balance = {};
-  PEOPLE.forEach(p=> balance[p] = totalPaid[p] - totalOwed[p]);
+  const totalPaid = {}, balance = {};
+  PEOPLE.forEach(p=>{
+    totalPaid[p] = realPaid[p] + settleSent[p] - settleReceived[p];
+    balance[p] = totalPaid[p] - totalOwed[p];
+  });
 
   return { totalPaid, totalOwed, balance, grandTotal, unassignedPaid, expenses };
 }
@@ -699,9 +713,13 @@ function renderGastos(){
       <div class="ef-field ef-chargeto"><span class="ef-label">Cargado a</span>
         ${chargeChipsHtml()}
       </div>
+      <label class="ef-field ef-settlement chk">
+        <input type="checkbox" data-exp="isSettlement">
+        <span>Es una liquidación / pago directo entre personas (no es un gasto del viaje)</span>
+      </label>
       <button type="button" class="add-confirm ef-submit" data-submit-expense>Añadir gasto</button>
     </div>
-    <p class="empty-note" style="padding:8px 2px 0;">💡 Para registrar que alguien te ha devuelto dinero (p.ej. Albertito paga 500 € a Mallo), añádelo como gasto pagado por Albertito y cargado solo a Mallo.</p>
+    <p class="empty-note" style="padding:8px 2px 0;">💡 Para registrar que alguien te ha devuelto dinero (p.ej. Albertito paga 500 € a Mallo), añádelo pagado por Albertito, cargado solo a Mallo, y marca la casilla de liquidación — así no se cuenta como gasto nuevo del viaje, solo salda deuda.</p>
   </div></div>`;
 
   const expenses = getExpenses();
@@ -714,7 +732,7 @@ function renderGastos(){
       const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="expense-row">
         <div class="expense-main">
-          <div class="expense-concept">${escapeHtml(e.concept)}</div>
+          <div class="expense-concept">${escapeHtml(e.concept)}${e.isSettlement ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
           <div class="expense-meta">${e.date.split('-').reverse().join('/')}${e.detail ? ' · ' + escapeHtml(e.detail) : ''}</div>
           <div class="expense-meta">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
@@ -752,11 +770,11 @@ function collectAllCostItems(){
 function renderPresupuesto(){
   const items = collectAllCostItems();
   const { totalPaid, totalOwed, balance, grandTotal, unassignedPaid, expenses } = buildLedger();
-  const maxVal = Math.max(1, ...Object.values(totalPaid));
+  const maxVal = Math.max(1, ...Object.values(totalPaid).map(v=>Math.max(0,v)));
   const settlements = simplifyDebts(balance);
 
   let html = `<h2 class="section-title">Presupuesto</h2>
-  <p class="section-sub">Cada partida del itinerario se reparte entre los 4. Cada gasto suelto de la pestaña <b>Gastos</b> se reparte solo entre a quien se lo hayáis cargado. Los vuelos quedan fuera porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona).</p>`;
+  <p class="section-sub">Cada partida del itinerario se reparte entre los 4. Cada gasto suelto de la pestaña <b>Gastos</b> se reparte solo entre a quien se lo hayáis cargado. Las liquidaciones (pagos directos entre vosotros) no cuentan como gasto del viaje, solo mueven saldo — por eso "aportado" baja para quien recibe un pago y sube para quien lo hace, hasta quedar igualado cuando todo está saldado. Los vuelos quedan fuera porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona).</p>`;
 
   html += `<div class="total-banner">
     <div><div class="lbl">Total registrado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
@@ -773,8 +791,8 @@ function renderPresupuesto(){
     html += `<div class="budget-card">
       <div class="budget-name">${p}</div>
       <div class="budget-amt">${paid.toFixed(2)} €</div>
-      <div class="bar-wrap"><div class="bar-fill" style="width:${(paid/maxVal*100).toFixed(0)}%"></div></div>
-      <div class="budget-sub">pagado por ${p} · le corresponde ${owed.toFixed(2)} €</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${Math.max(0,(paid/maxVal*100)).toFixed(0)}%"></div></div>
+      <div class="budget-sub">aportado (neto) por ${p} · le corresponde ${owed.toFixed(2)} €</div>
       <div class="budget-balance ${balanceClass}">${balanceLabel}</div>
     </div>`;
   });
@@ -818,7 +836,7 @@ function renderPresupuesto(){
       const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="card"><div style="padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
         <div>
-          <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span></div>
+          <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span>${e.isSettlement ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
           <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
         <span class="mono" style="font-weight:700;">${parseFloat(e.amount).toFixed(2)} €</span>
@@ -956,7 +974,7 @@ document.addEventListener('click', (e)=>{
     const to = settleBtn.dataset.settleTo;
     const amount = settleBtn.dataset.settleAmount;
     if(confirm(`¿Registrar que ${from} ha pagado ${amount} € a ${to}?`)){
-      addExpense(new Date().toISOString().slice(0,10), `Liquidación ${from} → ${to}`, '', amount, from, [to]);
+      addExpense(new Date().toISOString().slice(0,10), `Liquidación ${from} → ${to}`, '', amount, from, [to], true);
     }
     return;
   }
@@ -970,7 +988,8 @@ function submitExpenseForm(){
   const detail = form.querySelector('[data-exp="detail"]').value;
   const amount = form.querySelector('[data-exp="amount"]').value;
   const paidBy = form.querySelector('[data-exp="paidBy"]').value;
-  addExpense(date, concept, detail, amount, paidBy, Array.from(expenseChargeSelection));
+  const isSettlement = form.querySelector('[data-exp="isSettlement"]').checked;
+  addExpense(date, concept, detail, amount, paidBy, Array.from(expenseChargeSelection), isSettlement);
 }
 
 document.addEventListener('keydown', (e)=>{

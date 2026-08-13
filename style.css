@@ -237,6 +237,11 @@ a{ color:var(--jade-dark); }
 .ef-amount{ flex:0 1 110px; }
 .ef-paidby{ flex:0 1 140px; }
 .ef-chargeto{ flex:1 1 100%; }
+.ef-settlement{
+  flex:1 1 100%; flex-direction:row !important; align-items:center; gap:7px !important;
+  font-size:12.5px; color:var(--ink-soft); cursor:pointer;
+}
+.ef-settlement input{ accent-color:var(--cinnabar); flex:0 0 auto; }
 .ef-submit{ flex:0 0 auto; }
 .charge-picker{ display:flex; flex-wrap:wrap; gap:6px; }
 .charge-chip{

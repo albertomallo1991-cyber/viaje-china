@@ -308,7 +308,15 @@ function visibleItems(g){
   return defaults.concat(customs);
 }
 
-/* ---------- GASTOS (registro libre de gastos) ---------- */
+/* ---------- GASTOS (registro libre de gastos, estilo Splitwise) ---------- */
+// Cada gasto tiene un único pagador ("paidBy") y una lista de a quién se le
+// carga ("chargedTo"), que puede ser 1, varias o todas las personas. El
+// importe se reparte a partes iguales entre los de "chargedTo". Esto sirve
+// tanto para gastos compartidos normales (chargedTo = todos, o un subgrupo)
+// como para liquidaciones directas entre dos personas (chargedTo = 1 sola
+// persona), sin necesidad de un tipo de movimiento distinto.
+let expenseChargeSelection = new Set(PEOPLE);
+
 function getExpenses(){
   const rec = EDITS.expenses || {};
   return Object.keys(rec).map(k=>rec[k]).sort((a,b)=>{
@@ -316,21 +324,86 @@ function getExpenses(){
     return (b.id||"").localeCompare(a.id||"");
   });
 }
-function addExpense(date, concept, detail, amount, paidBy){
+function addExpense(date, concept, detail, amount, paidBy, chargedTo){
   if(!concept || !concept.trim()) return;
   const amt = parseFloat(amount);
   if(!amt || amt <= 0) return;
+  const charged = (chargedTo && chargedTo.length) ? chargedTo.filter(p=>PEOPLE.includes(p)) : PEOPLE.slice();
   const id = 'exp-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
-  const item = { id, date: date || new Date().toISOString().slice(0,10), concept: concept.trim(), detail: (detail||"").trim(), amount: amt, paidBy: paidBy || "" };
+  const item = { id, date: date || new Date().toISOString().slice(0,10), concept: concept.trim(), detail: (detail||"").trim(), amount: amt, paidBy: paidBy || "", chargedTo: charged };
   EDITS.expenses = EDITS.expenses || {};
   EDITS.expenses[id] = item;
   writePath(`expenses/${id}`, item);
+  expenseChargeSelection = new Set(PEOPLE);
   renderCurrentTab();
 }
 function removeExpense(id){
   if(EDITS.expenses) delete EDITS.expenses[id];
   writePath(`expenses/${id}`, null);
   renderCurrentTab();
+}
+
+/* ---------- LEDGER (saldos entre los 4, estilo Splitwise) ---------- */
+// Cada partida del itinerario se reparte siempre entre los 4 (comportamiento
+// de siempre). Cada gasto suelto se reparte entre quien esté en su
+// "chargedTo". balance[p] = lo que p ha pagado - lo que le corresponde pagar.
+// balance > 0 -> le deben; balance < 0 -> debe.
+function buildLedger(){
+  const totalPaid = {}, totalOwed = {};
+  PEOPLE.forEach(p=>{ totalPaid[p]=0; totalOwed[p]=0; });
+  let grandTotal = 0, unassignedPaid = 0;
+
+  collectAllCostItems().forEach(it=>{
+    const payer = fieldVal(it.id,'bookedBy', it.defBookedBy||"");
+    const cost = parseFloat(fieldVal(it.id,'cost', it.defCost)) || 0;
+    if(cost<=0) return;
+    grandTotal += cost;
+    if(payer && totalPaid[payer]!==undefined) totalPaid[payer] += cost;
+    else unassignedPaid += cost;
+    const share = cost / PEOPLE.length;
+    PEOPLE.forEach(p=> totalOwed[p] += share);
+  });
+
+  const expenses = getExpenses();
+  expenses.forEach(e=>{
+    const amt = parseFloat(e.amount) || 0;
+    if(amt<=0) return;
+    grandTotal += amt;
+    if(e.paidBy && totalPaid[e.paidBy]!==undefined) totalPaid[e.paidBy] += amt;
+    else unassignedPaid += amt;
+    const charged = (e.chargedTo && e.chargedTo.length) ? e.chargedTo.filter(p=>PEOPLE.includes(p)) : PEOPLE.slice();
+    const share = amt / (charged.length || 1);
+    charged.forEach(p=>{ if(totalOwed[p]!==undefined) totalOwed[p] += share; });
+  });
+
+  const balance = {};
+  PEOPLE.forEach(p=> balance[p] = totalPaid[p] - totalOwed[p]);
+
+  return { totalPaid, totalOwed, balance, grandTotal, unassignedPaid, expenses };
+}
+
+// Reduce los saldos netos a un número mínimo de pagos sugeridos (quién paga
+// a quién y cuánto), emparejando siempre al mayor deudor con el mayor acreedor.
+function simplifyDebts(balance){
+  const creditors = [], debtors = [];
+  PEOPLE.forEach(p=>{
+    const b = balance[p];
+    if(b > 0.005) creditors.push({name:p, amt:b});
+    else if(b < -0.005) debtors.push({name:p, amt:-b});
+  });
+  creditors.sort((a,b)=>b.amt-a.amt);
+  debtors.sort((a,b)=>b.amt-a.amt);
+  const transactions = [];
+  let i=0, j=0;
+  while(i<debtors.length && j<creditors.length){
+    const pay = Math.min(debtors[i].amt, creditors[j].amt);
+    if(pay > 0.005) transactions.push({from:debtors[i].name, to:creditors[j].name, amount:pay});
+    debtors[i].amt -= pay;
+    creditors[j].amt -= pay;
+    if(debtors[i].amt < 0.005) i++;
+    if(creditors[j].amt < 0.005) j++;
+  }
+  return transactions;
 }
 
 function isMine(id, defBookedBy){
@@ -581,21 +654,54 @@ function renderHoteles(){
 }
 
 /* ---------- TAB: GASTOS ---------- */
+function chargeChipsHtml(){
+  const allActive = expenseChargeSelection.size === PEOPLE.length;
+  let html = `<div class="charge-picker">`;
+  html += `<button type="button" class="charge-chip ${allActive?'active':''}" data-charge-toggle="__all__">Todos</button>`;
+  PEOPLE.forEach(p=>{
+    html += `<button type="button" class="charge-chip ${expenseChargeSelection.has(p)?'active':''}" data-charge-toggle="${p}">${p}</button>`;
+  });
+  html += `</div>`;
+  return html;
+}
+function updateChargeChipsUI(){
+  const allBtn = document.querySelector('[data-charge-toggle="__all__"]');
+  if(allBtn) allBtn.classList.toggle('active', expenseChargeSelection.size === PEOPLE.length);
+  PEOPLE.forEach(p=>{
+    const btn = document.querySelector(`[data-charge-toggle="${p}"]`);
+    if(btn) btn.classList.toggle('active', expenseChargeSelection.has(p));
+  });
+}
+
 function renderGastos(){
   const today = new Date().toISOString().slice(0,10);
   let html = `<h2 class="section-title">Gastos del viaje</h2>
-  <p class="section-sub">Registra aquí cualquier gasto suelto (taxis, comidas, entradas de última hora...). Se suma automáticamente al reparto de la pestaña Presupuesto.</p>`;
+  <p class="section-sub">Registra aquí cualquier gasto suelto o liquidación entre vosotros. Elige quién lo pagó y a quién se le carga (uno, varios o todos) — se reparte a partes iguales entre los elegidos y se suma al saldo de la pestaña Presupuesto.</p>`;
 
   html += `<div class="card"><div style="padding:16px 18px;">
     <div class="block-title" style="margin-bottom:10px;">➕ Añadir gasto</div>
-    <div class="add-activity-form open" data-expense-form>
-      <input class="exp-date" type="date" data-exp="date" value="${today}">
-      <input class="exp-concept" type="text" data-exp="concept" placeholder="Concepto (p.ej. Taxi, Comida...)">
-      <input class="exp-detail" type="text" data-exp="detail" placeholder="Detalle (opcional)">
-      <input class="exp-amount" type="number" step="0.01" data-exp="amount" placeholder="€ importe">
-      <select class="exp-paidby" data-exp="paidBy">${whoOptions("")}</select>
-      <button type="button" class="add-confirm" data-submit-expense>Añadir gasto</button>
+    <div class="expense-form" data-expense-form>
+      <label class="ef-field ef-date"><span class="ef-label">Fecha</span>
+        <input type="date" data-exp="date" value="${today}">
+      </label>
+      <label class="ef-field ef-concept"><span class="ef-label">Concepto</span>
+        <input type="text" data-exp="concept" placeholder="p.ej. Taxi, Comida...">
+      </label>
+      <label class="ef-field ef-detail"><span class="ef-label">Detalle (opcional)</span>
+        <input type="text" data-exp="detail" placeholder="Notas...">
+      </label>
+      <label class="ef-field ef-amount"><span class="ef-label">Importe</span>
+        <input type="number" step="0.01" data-exp="amount" placeholder="€">
+      </label>
+      <label class="ef-field ef-paidby"><span class="ef-label">Pagado por</span>
+        <select data-exp="paidBy">${whoOptions("")}</select>
+      </label>
+      <div class="ef-field ef-chargeto"><span class="ef-label">Cargado a</span>
+        ${chargeChipsHtml()}
+      </div>
+      <button type="button" class="add-confirm ef-submit" data-submit-expense>Añadir gasto</button>
     </div>
+    <p class="empty-note" style="padding:8px 2px 0;">💡 Para registrar que alguien te ha devuelto dinero (p.ej. Albertito paga 500 € a Mallo), añádelo como gasto pagado por Albertito y cargado solo a Mallo.</p>
   </div></div>`;
 
   const expenses = getExpenses();
@@ -604,13 +710,15 @@ function renderGastos(){
   } else {
     html += `<div class="card"><div style="padding:4px 18px;">`;
     expenses.forEach(e=>{
+      const charged = (e.chargedTo && e.chargedTo.length) ? e.chargedTo : PEOPLE;
+      const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="expense-row">
         <div class="expense-main">
           <div class="expense-concept">${escapeHtml(e.concept)}</div>
           <div class="expense-meta">${e.date.split('-').reverse().join('/')}${e.detail ? ' · ' + escapeHtml(e.detail) : ''}</div>
+          <div class="expense-meta">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
         <div class="expense-side">
-          <span class="badge" style="background:var(--porcelain-2);color:var(--ink-soft);">${e.paidBy||'sin asignar'}</span>
           <span class="mono expense-amt">${parseFloat(e.amount).toFixed(2)} €</span>
           <button class="remove-btn" data-remove-expense-id="${e.id}" title="Quitar gasto">🗑️</button>
         </div>
@@ -643,57 +751,51 @@ function collectAllCostItems(){
 
 function renderPresupuesto(){
   const items = collectAllCostItems();
-  const totals = {};
-  PEOPLE.forEach(p=> totals[p] = 0);
-  let grandTotal = 0;
-  let unassigned = 0;
-
-  items.forEach(it=>{
-    const bookedBy = fieldVal(it.id,'bookedBy', it.defBookedBy||"");
-    const costRaw = fieldVal(it.id,'cost', it.defCost);
-    const cost = parseFloat(costRaw) || 0;
-    grandTotal += cost;
-    if(bookedBy && totals[bookedBy] !== undefined) totals[bookedBy] += cost;
-    else if(cost>0) unassigned += cost;
-  });
-
-  const expenses = getExpenses();
-  expenses.forEach(e=>{
-    const amt = parseFloat(e.amount) || 0;
-    grandTotal += amt;
-    if(e.paidBy && totals[e.paidBy] !== undefined) totals[e.paidBy] += amt;
-    else if(amt>0) unassigned += amt;
-  });
-
-  const maxVal = Math.max(1, ...Object.values(totals));
-  const fairShare = grandTotal / PEOPLE.length;
+  const { totalPaid, totalOwed, balance, grandTotal, unassignedPaid, expenses } = buildLedger();
+  const maxVal = Math.max(1, ...Object.values(totalPaid));
+  const settlements = simplifyDebts(balance);
 
   let html = `<h2 class="section-title">Presupuesto</h2>
-  <p class="section-sub">Suma en vivo de lo que cada uno ha pagado o tiene asignado, incluyendo los gastos sueltos de la pestaña <b>Gastos</b>. Los vuelos quedan fuera del reparto porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona). Todo lo demás (hoteles, trenes, actividades, gastos sueltos) se reparte a partes iguales entre los 4.</p>`;
+  <p class="section-sub">Cada partida del itinerario se reparte entre los 4. Cada gasto suelto de la pestaña <b>Gastos</b> se reparte solo entre a quien se lo hayáis cargado. Los vuelos quedan fuera porque cada uno paga el suyo por su cuenta y sale igual para los 4 (<b class="mono">${FLIGHTS_PP_TOTAL.toFixed(2)} €</b> por persona).</p>`;
 
   html += `<div class="total-banner">
-    <div><div class="lbl">Total gestionado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
-    <div><div class="lbl">Por pasajero (÷4)</div><div class="amt">${fairShare.toFixed(2)} €</div></div>
-    <div><div class="lbl">Sin asignar</div><div class="amt" style="color:#fff;">${unassigned.toFixed(2)} €</div></div>
+    <div><div class="lbl">Total registrado</div><div class="amt">${grandTotal.toFixed(2)} €</div></div>
+    <div><div class="lbl">Sin pagador asignado</div><div class="amt" style="color:#fff;">${unassignedPaid.toFixed(2)} €</div></div>
   </div>`;
 
   html += `<div class="budget-grid">`;
   PEOPLE.forEach(p=>{
-    const amt = totals[p];
-    const balance = amt - fairShare;
+    const paid = totalPaid[p], owed = totalOwed[p], bal = balance[p];
     let balanceLabel, balanceClass;
-    if(Math.abs(balance) < 0.01){ balanceLabel = 'En paz'; balanceClass = 'even'; }
-    else if(balance > 0){ balanceLabel = `Le deben ${balance.toFixed(2)} €`; balanceClass = 'owed'; }
-    else { balanceLabel = `Debe ${Math.abs(balance).toFixed(2)} €`; balanceClass = 'owes'; }
+    if(Math.abs(bal) < 0.01){ balanceLabel = 'En paz'; balanceClass = 'even'; }
+    else if(bal > 0){ balanceLabel = `Le deben ${bal.toFixed(2)} €`; balanceClass = 'owed'; }
+    else { balanceLabel = `Debe ${Math.abs(bal).toFixed(2)} €`; balanceClass = 'owes'; }
     html += `<div class="budget-card">
       <div class="budget-name">${p}</div>
-      <div class="budget-amt">${amt.toFixed(2)} €</div>
-      <div class="bar-wrap"><div class="bar-fill" style="width:${(amt/maxVal*100).toFixed(0)}%"></div></div>
-      <div class="budget-sub">gestionado por ${p} · le toca ${fairShare.toFixed(2)} €</div>
+      <div class="budget-amt">${paid.toFixed(2)} €</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${(paid/maxVal*100).toFixed(0)}%"></div></div>
+      <div class="budget-sub">pagado por ${p} · le corresponde ${owed.toFixed(2)} €</div>
       <div class="budget-balance ${balanceClass}">${balanceLabel}</div>
     </div>`;
   });
   html += `</div>`;
+
+  html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Quién debe a quién</h3>`;
+  if(!settlements.length){
+    html += `<p class="empty-note">Todo saldado — nadie debe nada a nadie. 🎉</p>`;
+  } else {
+    html += `<div class="card"><div style="padding:4px 18px;">`;
+    settlements.forEach(t=>{
+      html += `<div class="settle-row">
+        <div class="settle-people"><b>${t.from}</b><span class="settle-arrow">→</span><b>${t.to}</b></div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="mono settle-amt">${t.amount.toFixed(2)} €</span>
+          <button type="button" class="add-confirm" style="padding:5px 10px;font-size:11.5px;" data-settle-from="${t.from}" data-settle-to="${t.to}" data-settle-amount="${t.amount.toFixed(2)}">Marcar como pagado</button>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
 
   html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Detalle de partidas del itinerario</h3>`;
   items.forEach(it=>{
@@ -712,12 +814,14 @@ function renderPresupuesto(){
   if(expenses.length){
     html += `<h3 style="font-family:'Noto Serif SC',serif;font-size:16px;margin:22px 0 10px;">Gastos sueltos registrados</h3>`;
     expenses.forEach(e=>{
+      const charged = (e.chargedTo && e.chargedTo.length) ? e.chargedTo : PEOPLE;
+      const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="card"><div style="padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
-        <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span></div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <span class="badge" style="background:var(--porcelain-2);color:var(--ink-soft);">${e.paidBy||'sin asignar'}</span>
-          <span class="mono" style="font-weight:700;">${parseFloat(e.amount).toFixed(2)} €</span>
+        <div>
+          <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span></div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
+        <span class="mono" style="font-weight:700;">${parseFloat(e.amount).toFixed(2)} €</span>
       </div></div>`;
     });
   }
@@ -833,6 +937,29 @@ document.addEventListener('click', (e)=>{
     submitExpenseForm();
     return;
   }
+  const chargeChipBtn = e.target.closest('[data-charge-toggle]');
+  if(chargeChipBtn){
+    const person = chargeChipBtn.dataset.chargeToggle;
+    if(person === '__all__'){
+      if(expenseChargeSelection.size === PEOPLE.length) expenseChargeSelection.clear();
+      else PEOPLE.forEach(p=>expenseChargeSelection.add(p));
+    } else {
+      if(expenseChargeSelection.has(person)) expenseChargeSelection.delete(person);
+      else expenseChargeSelection.add(person);
+    }
+    updateChargeChipsUI();
+    return;
+  }
+  const settleBtn = e.target.closest('[data-settle-from]');
+  if(settleBtn){
+    const from = settleBtn.dataset.settleFrom;
+    const to = settleBtn.dataset.settleTo;
+    const amount = settleBtn.dataset.settleAmount;
+    if(confirm(`¿Registrar que ${from} ha pagado ${amount} € a ${to}?`)){
+      addExpense(new Date().toISOString().slice(0,10), `Liquidación ${from} → ${to}`, '', amount, from, [to]);
+    }
+    return;
+  }
 });
 
 function submitExpenseForm(){
@@ -843,7 +970,7 @@ function submitExpenseForm(){
   const detail = form.querySelector('[data-exp="detail"]').value;
   const amount = form.querySelector('[data-exp="amount"]').value;
   const paidBy = form.querySelector('[data-exp="paidBy"]').value;
-  addExpense(date, concept, detail, amount, paidBy);
+  addExpense(date, concept, detail, amount, paidBy, Array.from(expenseChargeSelection));
 }
 
 document.addEventListener('keydown', (e)=>{

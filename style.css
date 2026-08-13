@@ -218,11 +218,34 @@ a{ color:var(--jade-dark); }
 }
 
 /* ---------- GASTOS ---------- */
-.add-activity-form .exp-date{ flex:0 1 150px; }
-.add-activity-form .exp-concept{ flex:1 1 180px; min-width:150px; }
-.add-activity-form .exp-detail{ flex:1 1 180px; min-width:150px; }
-.add-activity-form .exp-amount{ flex:0 1 110px; }
-.add-activity-form .exp-paidby{ flex:0 1 130px; }
+.expense-form{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
+  background:var(--jade-tint); border:1px solid var(--line); border-radius:10px; padding:12px;
+}
+.ef-field{ display:flex; flex-direction:column; gap:4px; }
+.ef-label{
+  font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-soft);
+}
+.ef-field input, .ef-field select{
+  font-family:'Manrope',sans-serif; font-size:12.5px; border:1px solid var(--line); border-radius:7px;
+  padding:6px 8px; background:#fff; color:var(--ink);
+}
+.ef-date{ flex:0 1 150px; }
+.ef-concept{ flex:1 1 180px; min-width:150px; }
+.ef-detail{ flex:1 1 180px; min-width:150px; }
+.ef-amount{ flex:0 1 110px; }
+.ef-paidby{ flex:0 1 140px; }
+.ef-chargeto{ flex:1 1 100%; }
+.ef-submit{ flex:0 0 auto; }
+.charge-picker{ display:flex; flex-wrap:wrap; gap:6px; }
+.charge-chip{
+  font-family:'Manrope',sans-serif; font-weight:700; font-size:12px;
+  padding:5px 12px; border-radius:999px; border:1px solid var(--line);
+  background:#fff; color:var(--ink-soft); cursor:pointer; transition:.15s;
+}
+.charge-chip.active{ background:var(--jade); border-color:var(--jade); color:#fff; }
+.charge-chip:hover:not(.active){ border-color:var(--jade); color:var(--jade-dark); }
 .expense-row{
   display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
   padding:12px 0; border-top:1px dashed var(--line);
@@ -233,9 +256,20 @@ a{ color:var(--jade-dark); }
 .expense-meta{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
 .expense-side{ flex:0 0 auto; display:flex; align-items:center; gap:10px; }
 .expense-amt{ font-weight:700; font-variant-numeric:tabular-nums; }
+.settle-row{
+  display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:12px 0; border-top:1px dashed var(--line);
+}
+.settle-row:first-child{ border-top:none; }
+.settle-people{ font-size:13.5px; }
+.settle-arrow{ color:var(--gold); margin:0 8px; font-weight:700; }
+.settle-amt{ font-weight:700; font-variant-numeric:tabular-nums; }
 @media(max-width:640px){
   .expense-row{ flex-direction:column; }
   .expense-side{ width:100%; justify-content:space-between; }
+  .expense-form{ align-items:stretch; }
+  .ef-field{ flex:1 1 100% !important; }
+  .settle-row{ flex-direction:column; align-items:flex-start; }
 }
 
 /* ---------- EDIT ROW ---------- */

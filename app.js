@@ -324,6 +324,13 @@ function getExpenses(){
     return (b.id||"").localeCompare(a.id||"");
   });
 }
+// Algunas liquidaciones se crearon con el botón "Marcar como pagado" antes de
+// que existiera el campo isSettlement, así que también las reconocemos por
+// el concepto autogenerado ("Liquidación X → Y") para que sigan tratándose
+// como liquidación sin tener que borrarlas y volver a añadirlas.
+function isSettlementExpense(e){
+  return !!(e && (e.isSettlement || /^Liquidación .+ → .+/.test(e.concept||"")));
+}
 function addExpense(date, concept, detail, amount, paidBy, chargedTo, isSettlement){
   if(!concept || !concept.trim()) return;
   const amt = parseFloat(amount);
@@ -376,7 +383,7 @@ function buildLedger(){
     if(amt<=0) return;
     const charged = (e.chargedTo && e.chargedTo.length) ? e.chargedTo.filter(p=>PEOPLE.includes(p)) : PEOPLE.slice();
     const share = amt / (charged.length || 1);
-    if(e.isSettlement){
+    if(isSettlementExpense(e)){
       if(e.paidBy && settleSent[e.paidBy]!==undefined) settleSent[e.paidBy] += amt;
       charged.forEach(p=>{ if(settleReceived[p]!==undefined) settleReceived[p] += share; });
     } else {
@@ -732,7 +739,7 @@ function renderGastos(){
       const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="expense-row">
         <div class="expense-main">
-          <div class="expense-concept">${escapeHtml(e.concept)}${e.isSettlement ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
+          <div class="expense-concept">${escapeHtml(e.concept)}${isSettlementExpense(e) ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
           <div class="expense-meta">${e.date.split('-').reverse().join('/')}${e.detail ? ' · ' + escapeHtml(e.detail) : ''}</div>
           <div class="expense-meta">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
@@ -836,7 +843,7 @@ function renderPresupuesto(){
       const chargedLabel = charged.length === PEOPLE.length ? 'Todos' : charged.join(', ');
       html += `<div class="card"><div style="padding:12px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
         <div>
-          <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span>${e.isSettlement ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
+          <div style="font-size:13.5px;font-weight:600;">${escapeHtml(e.concept)} <span class="mono" style="font-weight:400;color:var(--ink-soft);font-size:12px;">${e.date.split('-').reverse().join('/')}</span>${isSettlementExpense(e) ? ' <span class="badge" style="background:var(--cinnabar-tint);color:var(--cinnabar-dark);">🔁 Liquidación</span>' : ''}</div>
           <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Pagado por <b>${e.paidBy||'sin asignar'}</b> · Cargado a <b>${escapeHtml(chargedLabel)}</b></div>
         </div>
         <span class="mono" style="font-weight:700;">${parseFloat(e.amount).toFixed(2)} €</span>
